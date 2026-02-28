@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ullas-whatsapp-chatbot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app -c gunicorn.conf.py
+    envVars:
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: VERIFY_TOKEN
+        sync: false
+      - key: PHONE_NUMBER_ID
+        sync: false
+      - key: FLASK_DEBUG
+        value: "false"
