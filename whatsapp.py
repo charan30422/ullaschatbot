@@ -4,7 +4,6 @@ Sends text messages via the Meta Graph API.
 """
 import logging
 import requests
-import requests.exceptions
 from config import WHATSAPP_API_URL, WHATSAPP_TOKEN
 
 logger = logging.getLogger(__name__)
