@@ -20,6 +20,10 @@ def send_message(to: str, body: str) -> bool:
     Returns:
         True if the API accepted the message, False otherwise.
     """
+    logger.debug("send_message → to=%s body_len=%d", to, len(body))
+    logger.debug("send_message → API URL: %s", WHATSAPP_API_URL)
+    logger.debug("send_message → Token present: %s", bool(WHATSAPP_TOKEN and WHATSAPP_TOKEN != "YOUR_WHATSAPP_ACCESS_TOKEN"))
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json",
@@ -32,20 +36,30 @@ def send_message(to: str, body: str) -> bool:
     }
 
     try:
+        logger.info("📤 Sending WhatsApp message to %s ...", to)
         resp = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=10)
 
-        # Meta returns 200 on success
+        logger.info("📬 WhatsApp API response: status=%s", resp.status_code)
+        logger.debug("📬 WhatsApp API response body: %s", resp.text[:300])
+
         if resp.status_code == 200:
-            logger.info("✅ Message sent to %s", to)
+            logger.info("✅ Message successfully delivered to %s", to)
             return True
 
-        logger.error("❌ WhatsApp API error %s: %s", resp.status_code, resp.text)
+        logger.error(
+            "❌ WhatsApp API rejected message — status=%s body=%s",
+            resp.status_code, resp.text[:300]
+        )
         return False
 
     except requests.exceptions.Timeout:
-        logger.error("❌ Timeout sending message to %s (10s limit exceeded)", to)
+        logger.error("⏰ Timeout: WhatsApp API did not respond within 10s for recipient %s", to)
+        return False
+
+    except requests.exceptions.ConnectionError as exc:
+        logger.error("🔌 Connection error sending to %s: %s", to, exc)
         return False
 
     except requests.exceptions.RequestException as exc:
-        logger.error("❌ Failed to send message to %s: %s", to, exc)
+        logger.error("❌ Request exception sending to %s: %s", to, exc)
         return False

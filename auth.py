@@ -12,11 +12,6 @@ from mock_data import PHONE_TO_ULLAS, STUDENTS
 logger = logging.getLogger(__name__)
 
 # ----- In-memory session store -----
-# sessions[phone] = {
-#     "ullas_id": str | None,
-#     "state":    "awaiting_id" | "menu",
-#     "last_activity": float,
-# }
 sessions: dict = {}
 
 
@@ -29,42 +24,51 @@ def get_session(phone: str) -> Optional[dict]:
     """Return the active session for phone, or None if missing / expired."""
     sess = sessions.get(phone)
     if sess is None:
+        logger.debug("get_session(%s) → no session found", phone)
         return None
-    if _now() - sess.get("last_activity", 0) > SESSION_TIMEOUT_SECONDS:
-        logger.info("Session timed out for %s", phone)
+    age = _now() - sess.get("last_activity", 0)
+    if age > SESSION_TIMEOUT_SECONDS:
+        logger.info("get_session(%s) → session expired after %.0fs (limit=%ss)", phone, age, SESSION_TIMEOUT_SECONDS)
         sessions.pop(phone, None)
         return None
+    logger.debug("get_session(%s) → active session state=%s age=%.0fs", phone, sess.get("state"), age)
     return sess
 
 
 def start_session(phone: str) -> dict:
     """Create and return a fresh session for the given phone number."""
     sessions[phone] = {
-        "ullas_id":     None,
-        "state":        "awaiting_id",
+        "ullas_id":      None,
+        "state":         "awaiting_id",
         "last_activity": _now(),
     }
+    logger.info("start_session(%s) → new session created, total active sessions: %d", phone, len(sessions))
     return sessions[phone]
 
 
 def lookup_student(identifier: str) -> Optional[str]:
     """
     Look up a student by Ullas ID or registered phone number.
-
-    Args:
-        identifier: Ullas ID (e.g. "UL-09-2026-00456") or phone number
-                    in any common format (e.g. "+919876543210" or "919876543210")
-
-    Returns:
-        The matching ullas_id string, or None if not found.
+    Returns the matching ullas_id or None.
     """
+    logger.debug("lookup_student: checking identifier [%s]", identifier)
+
     # Direct Ullas ID match
     if identifier in STUDENTS:
+        logger.debug("lookup_student: direct STUDENTS match → %s", identifier)
         return identifier
 
-    # Phone number match — normalise by stripping +, spaces, dashes
+    # Phone number match — normalise
     clean = identifier.lstrip("+").replace(" ", "").replace("-", "")
-    return PHONE_TO_ULLAS.get(clean)  # returns None if not found
+    logger.debug("lookup_student: normalised phone = [%s], checking PHONE_TO_ULLAS", clean)
+    logger.debug("lookup_student: known phones = %s", list(PHONE_TO_ULLAS.keys()))
+
+    result = PHONE_TO_ULLAS.get(clean)
+    if result:
+        logger.debug("lookup_student: phone match found → %s", result)
+    else:
+        logger.warning("lookup_student: no match for [%s] (raw) / [%s] (clean)", identifier, clean)
+    return result
 
 
 def touch_session(phone: str) -> None:
@@ -72,8 +76,11 @@ def touch_session(phone: str) -> None:
     sess = sessions.get(phone)
     if sess:
         sess["last_activity"] = _now()
+        logger.debug("touch_session(%s) → last_activity refreshed", phone)
 
 
 def clear_session(phone: str) -> None:
     """Delete the session for the given phone number."""
+    existed = phone in sessions
     sessions.pop(phone, None)
+    logger.info("clear_session(%s) → removed=%s, remaining sessions: %d", phone, existed, len(sessions))
