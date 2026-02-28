@@ -1,11 +1,4 @@
-<<<<<<< HEAD
 flask
 python-dotenv
 requests
 gunicorn
-=======
-flask
-python-dotenv
-requests
-gunicorn
->>>>>>> dcac34ae394b737d3d1a4418eaed2730891f06a7
