@@ -1,206 +1,210 @@
 """
-Ullas WhatsApp Chatbot — Simple Q&A Bot (Twilio)
+Ullas Student WhatsApp Chatbot — Flask Middleware
 =================================================
-Receives messages via Twilio webhook and replies with
-predefined answers for common Ullas student queries.
+Entry point. Handles Twilio WhatsApp webhook & incoming messages.
+Routes messages through authentication → menu → query handlers.
 """
-import os
 import logging
 import sys
-from flask import Flask, request
-from twilio.rest import Client
+from flask import Flask, request, jsonify
 
-# ---- Logging ----
+from config import FLASK_PORT, FLASK_DEBUG
+from auth import (
+    get_session,
+    start_session,
+    lookup_student,
+    touch_session,
+    clear_session,
+)
+from handlers import MAIN_MENU, MENU_HANDLERS, talk_to_support
+from whatsapp import send_message
+
+# ---- Logging — stream to stdout so Render captures it ----
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    level=logging.DEBUG,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
     stream=sys.stdout,
     force=True,
 )
 logger = logging.getLogger(__name__)
 
-# ---- Config ----
-from dotenv import load_dotenv
-load_dotenv()
-
-TWILIO_ACCOUNT_SID     = os.environ.get("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN      = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_WHATSAPP_NUMBER = os.environ.get("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
-FLASK_PORT             = int(os.environ.get("PORT", os.environ.get("FLASK_PORT", "10000")))
-
-logger.info("🚀 Ullas WhatsApp Chatbot starting...")
-logger.info("   TWILIO_ACCOUNT_SID : %s", TWILIO_ACCOUNT_SID[:6] + "***" if TWILIO_ACCOUNT_SID else "NOT SET")
-logger.info("   TWILIO_FROM        : %s", TWILIO_WHATSAPP_NUMBER)
-logger.info("   PORT               : %s", FLASK_PORT)
+logger.info("=" * 60)
+logger.info("🚀  Ullas WhatsApp Chatbot — starting up (Twilio)")
+logger.info("    FLASK_PORT  : %s", FLASK_PORT)
+logger.info("    FLASK_DEBUG : %s", FLASK_DEBUG)
+logger.info("=" * 60)
 
 app = Flask(__name__)
 
+# Greeting message shown to new / returning users
+_WELCOME_MSG = (
+    "╔══════════════════════════╗\n"
+    "  👋 *Welcome to Ullas Support!*\n"
+    "╚══════════════════════════╝\n\n"
+    "To get started, please enter your:\n\n"
+    "🆔 *Ullas ID*\n"
+    "   _e.g. UL-09-2026-00456_\n\n"
+    "📱 *Registered Mobile Number*\n"
+    "   _e.g. 919876543210_\n\n"
+    "─────────────────────────\n"
+    "_Type your Ullas ID or phone number below_"
+)
 
-# ==============================
-# Health Check
-# ==============================
+
+# ===================================================================
+#  ROUTES
+# ===================================================================
+
 @app.route("/health", methods=["GET"])
 def health():
-    return {"status": "ok", "service": "ullas-chatbot"}, 200
+    """Simple health check — used by Render and uptime monitors."""
+    logger.info("🏥 /health called — responding ok")
+    return jsonify({"status": "ok", "service": "ullas-whatsapp-chatbot"})
 
 
-@app.route("/")
-def home():
-    return "Ullas WhatsApp Chatbot is Running 🚀"
-
-
-# ==============================
-# Twilio Webhook (POST)
-# ==============================
 @app.route("/webhook", methods=["POST"])
-def receive_message():
-    sender  = request.form.get("From", "")   # e.g. whatsapp:+918125930620
+def handle_message():
+    """
+    Receive incoming WhatsApp messages from Twilio.
+    Twilio sends form-encoded POST data (not JSON).
+    """
+    # Twilio sends form data, not JSON
     body    = request.form.get("Body", "").strip()
+    sender  = request.form.get("From", "")   # format: "whatsapp:+919876543210"
+    num_media = request.form.get("NumMedia", "0")
 
-    logger.info("📩 From=%s Body=[%s]", sender, body)
+    logger.info("📥 Twilio webhook — From=%s Body=[%s] NumMedia=%s", sender, body, num_media)
 
     if not sender or not body:
+        logger.warning("⚠️ Missing From or Body — ignoring")
         return "", 200
 
-    # Normalize phone number
+    # Strip "whatsapp:+" prefix to get plain phone number
     phone = sender.replace("whatsapp:+", "").replace("whatsapp:", "").lstrip("+")
+    logger.info("📱 Normalised phone: %s", phone)
 
-    reply = generate_reply(body)
-    logger.info("💬 Reply → %s", reply[:80])
+    try:
+        _process_message(phone, body)
+    except Exception:
+        logger.exception("💥 Unhandled exception in _process_message")
 
-    send_message(phone, reply)
+    # Twilio expects empty 200 response (we send replies via API, not TwiML)
     return "", 200
 
 
-# ==============================
-# Chatbot Logic — Q&A
-# ==============================
-MENU = (
-    "Welcome to Ullas Support 🌟\n\n"
-    "Please choose an option:\n\n"
-    "1️⃣ When is the UEE exam?\n"
-    "2️⃣ Exam centre details\n"
-    "3️⃣ Registration status\n"
-    "4️⃣ Attendance\n"
-    "5️⃣ Scholarship status\n"
-    "6️⃣ Certificate status\n"
-    "7️⃣ Renewal status\n\n"
-    "Reply with the number (1-7)."
-)
+# ===================================================================
+#  MESSAGE PROCESSING STATE MACHINE
+# ===================================================================
 
-def generate_reply(user_text: str) -> str:
-    text = user_text.lower().strip()
+def _process_message(phone: str, text: str) -> None:
+    """
+    Core conversation state machine.
 
-    if text in ["hi", "hello", "hey", "start", "menu"]:
-        return MENU
+    States:
+        (no session)  → greet & ask for Ullas ID / phone
+        awaiting_id   → look up student → show menu
+        menu          → route to query handler
+    """
+    text_lower = text.lower()
+    logger.info("🔄 Processing — phone=%s state=? text=[%s]", phone, text)
 
-    elif text == "1":
-        return (
-            "📅 *UEE Exam Date*\n\n"
-            "The UEE (Ullas Eligibility Exam) date will be announced "
-            "on the official Ullas portal and communicated to registered students.\n\n"
-            "📌 Check: ullas.gov.in\n\n"
-            "_Reply *menu* to go back._"
-        )
+    # ----- Reset keywords -----
+    if text_lower in ("hi", "hello", "hey", "start", "reset"):
+        logger.info("🔁 Reset keyword for %s — clearing session", phone)
+        clear_session(phone)
+        start_session(phone)
+        sent = send_message(phone, _WELCOME_MSG)
+        logger.info("📤 Welcome sent to %s — success=%s", phone, sent)
+        return
 
-    elif text == "2":
-        return (
-            "🏫 *Exam Centre Details*\n\n"
-            "Your exam centre will be allotted based on your district "
-            "and communicated via your registered email and the student portal.\n\n"
-            "📌 Login to the portal to check your allotted centre.\n\n"
-            "_Reply *menu* to go back._"
-        )
+    # ----- Get existing session -----
+    sess = get_session(phone)
+    logger.debug("🗂  Session for %s: %s", phone, sess)
 
-    elif text == "3":
-        return (
-            "📋 *Registration Status*\n\n"
-            "You can check your registration status by:\n"
-            "1. Logging into the Ullas student portal\n"
-            "2. Going to 'My Profile' → 'Registration Status'\n\n"
-            "📌 If status shows REJECTED, re-upload the required documents.\n\n"
-            "_Reply *menu* to go back._"
-        )
+    if sess is None:
+        logger.info("🆕 No session for %s — creating new", phone)
+        start_session(phone)
+        sent = send_message(phone, _WELCOME_MSG)
+        logger.info("📤 Welcome sent to %s — success=%s", phone, sent)
+        return
 
-    elif text == "4":
-        return (
-            "📊 *Attendance*\n\n"
-            "Minimum *75% attendance* is required across all summits "
-            "to be eligible for the 2nd scholarship installment.\n\n"
-            "Summit sessions:\n"
-            "• Summit 1 • Summit 2 • Summit 3 • Summit 4\n\n"
-            "📌 Check your attendance in the student portal.\n\n"
-            "_Reply *menu* to go back._"
-        )
+    state = sess.get("state", "awaiting_id")
+    logger.info("📍 State for %s: %s", phone, state)
 
-    elif text == "5":
-        return (
-            "💰 *Scholarship Status*\n\n"
-            "The Ullas scholarship is disbursed in 2 installments:\n"
-            "• *1st installment* — after registration verification\n"
-            "• *2nd installment* — after 75% summit attendance\n\n"
-            "📌 Check payment status in the portal under 'Scholarship'.\n"
-            "If payment failed, update your bank details.\n\n"
-            "_Reply *menu* to go back._"
-        )
+    # ----- State: awaiting_id -----
+    if state == "awaiting_id":
+        logger.info("🔍 Looking up student: [%s]", text)
+        ullas_id = lookup_student(text)
+        logger.info("🔍 Lookup result: %s", ullas_id)
 
-    elif text == "6":
-        return (
-            "🎓 *Certificate Status*\n\n"
-            "Participation certificates are issued after the final summit.\n\n"
-            "📌 Download from the portal under 'My Certificates'.\n"
-            "If not available, contact your school SPOC.\n\n"
-            "_Reply *menu* to go back._"
-        )
+        if ullas_id is None:
+            logger.warning("❌ Student not found for [%s] from %s", text, phone)
+            sent = send_message(
+                phone,
+                "❌ We could not find a student with that ID or phone number.\n"
+                "Please check and try again.\n\n"
+                "🆔 *Ullas ID* format: UL-XX-YYYY-NNNNN\n"
+                "📱 *Phone* format: 91XXXXXXXXXX",
+            )
+            logger.info("📤 Not-found message sent — success=%s", sent)
+            return
 
-    elif text == "7":
-        return (
-            "🔄 *Renewal Status*\n\n"
-            "Existing Ullas students must renew each academic year.\n\n"
-            "📌 Log into the portal and go to 'Renewal' section.\n"
-            "Contact your school SPOC if renewal is pending.\n\n"
-            "_Reply *menu* to go back._"
-        )
+        logger.info("✅ Student found: %s", ullas_id)
+        sess["ullas_id"] = ullas_id
+        sess["state"]    = "menu"
+        touch_session(phone)
+        sent = send_message(phone, f"✅ Student found: *{ullas_id}*\n\n{MAIN_MENU}")
+        logger.info("📤 Menu sent after login — success=%s", sent)
+        return
 
-    else:
-        return (
-            "🤔 I didn't understand that.\n\n"
-            "Please type *Hi* to see the main menu or choose 1-7."
-        )
+    # ----- State: menu -----
+    if state == "menu":
+        touch_session(phone)
 
+        if text_lower in ("menu", "back", "main menu", "0"):
+            logger.info("🏠 Menu keyword from %s", phone)
+            send_message(phone, MAIN_MENU)
+            return
 
-# ==============================
-# Send Message via Twilio
-# ==============================
-def send_message(to: str, body: str) -> None:
-    try:
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        if text_lower in ("exit", "quit", "logout", "bye"):
+            logger.info("🚪 Logout from %s", phone)
+            clear_session(phone)
+            send_message(phone, "👋 You have been logged out.\nSend *Hi* anytime to start again.")
+            return
 
-        to_formatted = f"whatsapp:+{to.lstrip('+')}"
+        if text in MENU_HANDLERS:
+            label, handler = MENU_HANDLERS[text]
+            ullas_id = sess.get("ullas_id")
+            logger.info("📋 Option %s (%s) by %s (ullas_id=%s)", text, label, phone, ullas_id)
+            try:
+                response = handler(ullas_id)
+                logger.debug("📋 Handler response: %s", response[:100])
+            except Exception:
+                logger.exception("💥 Handler for option %s raised an exception", text)
+                response = "⚠️ An error occurred. Please try again."
+            sent = send_message(phone, f"📋 *{label}*\n\n{response}\n\n_Reply *menu* to go back._")
+            logger.info("📤 Handler response sent — success=%s", sent)
+            return
 
-        raw_from = TWILIO_WHATSAPP_NUMBER.strip()
-        if raw_from.startswith("whatsapp:"):
-            from_formatted = raw_from
-        elif raw_from.startswith("+"):
-            from_formatted = f"whatsapp:{raw_from}"
-        else:
-            from_formatted = f"whatsapp:+{raw_from}"
+        if text == "7":
+            logger.info("📞 Support option by %s", phone)
+            send_message(phone, talk_to_support())
+            return
 
-        logger.info("📤 Sending to %s from %s", to_formatted, from_formatted)
+        logger.warning("🤔 Unrecognised input [%s] from %s in menu state", text, phone)
+        send_message(phone, "🤔 I didn't understand that.\n\n" + MAIN_MENU)
+        return
 
-        msg = client.messages.create(
-            body=body,
-            from_=from_formatted,
-            to=to_formatted,
-        )
-        logger.info("✅ Sent! SID=%s status=%s", msg.sid, msg.status)
-
-    except Exception as exc:
-        logger.error("❌ Twilio error: %s", exc)
+    # ----- Fallback -----
+    logger.error("💥 Unknown state [%s] for %s — resetting", state, phone)
+    clear_session(phone)
+    send_message(phone, "Something went wrong. Please send *Hi* to restart.")
 
 
-# ==============================
-# Entry Point
-# ==============================
+# ===================================================================
+#  ENTRY POINT
+# ===================================================================
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=FLASK_PORT, debug=False)
+    logger.info("🚀 Starting Flask dev server on port %s", FLASK_PORT)
+    app.run(host="0.0.0.0", port=FLASK_PORT, debug=FLASK_DEBUG)
