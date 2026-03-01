@@ -31,9 +31,17 @@ def send_message(to: str, body: str) -> bool:
     try:
         client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-        # Twilio requires "whatsapp:+<number>" format
-        to_formatted   = f"whatsapp:+{to.lstrip('+')}"
-        from_formatted = TWILIO_WHATSAPP_NUMBER  # already in whatsapp:+1415... format
+        # Twilio requires "whatsapp:+<number>" format for both From and To
+        to_formatted = f"whatsapp:+{to.lstrip('+')}"
+
+        # Normalize from number — works with any format the env var is set to
+        raw_from = TWILIO_WHATSAPP_NUMBER.strip()
+        if raw_from.startswith("whatsapp:"):
+            from_formatted = raw_from          # already correct: whatsapp:+14155238886
+        elif raw_from.startswith("+"):
+            from_formatted = f"whatsapp:{raw_from}"   # +14155238886 → whatsapp:+14155238886
+        else:
+            from_formatted = f"whatsapp:+{raw_from}"  # 14155238886 → whatsapp:+14155238886
 
         logger.info("📤 Sending WhatsApp message to %s via Twilio ...", to_formatted)
 
