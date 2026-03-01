@@ -10,11 +10,13 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# --- WhatsApp Business API ---
-WHATSAPP_TOKEN   = os.getenv("WHATSAPP_TOKEN", "YOUR_WHATSAPP_ACCESS_TOKEN")
-VERIFY_TOKEN     = os.getenv("VERIFY_TOKEN", "ullas_verify_token_2026")
-PHONE_NUMBER_ID  = os.getenv("PHONE_NUMBER_ID", "YOUR_PHONE_NUMBER_ID")
-WHATSAPP_API_URL = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages"
+# --- Twilio WhatsApp ---
+TWILIO_ACCOUNT_SID      = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN       = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_WHATSAPP_NUMBER  = os.getenv("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")  # Twilio sandbox default
+
+# --- Webhook verification (keep for Twilio signature validation) ---
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "ullas_verify_token_2026")
 
 # --- Session ---
 SESSION_TIMEOUT_SECONDS = int(os.getenv("SESSION_TIMEOUT_SECONDS", "600"))  # 10 minutes
@@ -26,10 +28,10 @@ FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
 # --- Config Validation Logs (visible at startup in Render) ---
 logger.info("📋 Config loaded:")
-logger.info("   PHONE_NUMBER_ID  : %s", PHONE_NUMBER_ID)
-logger.info("   WHATSAPP_API_URL : %s", WHATSAPP_API_URL)
-logger.info("   VERIFY_TOKEN     : %s", VERIFY_TOKEN[:4] + "***" if VERIFY_TOKEN else "❌ NOT SET")
-logger.info("   WHATSAPP_TOKEN   : %s", ("set (" + str(len(WHATSAPP_TOKEN)) + " chars)") if WHATSAPP_TOKEN and WHATSAPP_TOKEN != "YOUR_WHATSAPP_ACCESS_TOKEN" else "❌ NOT SET / PLACEHOLDER")
-logger.info("   SESSION_TIMEOUT  : %ss", SESSION_TIMEOUT_SECONDS)
-logger.info("   FLASK_PORT       : %s", FLASK_PORT)
-logger.info("   FLASK_DEBUG      : %s", FLASK_DEBUG)
+logger.info("   TWILIO_ACCOUNT_SID     : %s", TWILIO_ACCOUNT_SID[:6] + "***" if TWILIO_ACCOUNT_SID else "❌ NOT SET")
+logger.info("   TWILIO_AUTH_TOKEN      : %s", "set" if TWILIO_AUTH_TOKEN else "❌ NOT SET")
+logger.info("   TWILIO_WHATSAPP_NUMBER : %s", TWILIO_WHATSAPP_NUMBER)
+logger.info("   VERIFY_TOKEN           : %s", VERIFY_TOKEN[:4] + "***" if VERIFY_TOKEN else "❌ NOT SET")
+logger.info("   SESSION_TIMEOUT        : %ss", SESSION_TIMEOUT_SECONDS)
+logger.info("   FLASK_PORT             : %s", FLASK_PORT)
+logger.info("   FLASK_DEBUG            : %s", FLASK_DEBUG)
