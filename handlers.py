@@ -21,12 +21,12 @@ MAIN_MENU = (
     "  🌟 *Ullas Student Support* 🌟\n"
     "╚══════════════════════════╝\n\n"
     "Please choose an option:\n\n"
-    "1️⃣  Registration Status\n"
-    "2️⃣  Exam Centre Details\n"
-    "3️⃣  Attendance & Eligibility\n"
-    "4️⃣  Scholarship Status\n"
-    "5️⃣  Certificate Status\n"
-    "6️⃣  Renewal Status\n"
+    "1️⃣  What is my Registration Status?\n"
+    "2️⃣  Where is my UEE Exam Centre?\n"
+    "3️⃣  What is my Attendance & Eligibility?\n"
+    "4️⃣  What is my Scholarship Status?\n"
+    "5️⃣  Can I get my Certificate?\n"
+    "6️⃣  Am I marked for Renewal?\n"
     "7️⃣  Talk to Support\n\n"
     "_Reply with a number (1–7)_"
 )
@@ -286,10 +286,10 @@ def talk_to_support() -> str:
 
 # Map menu option number → (label, handler function)
 MENU_HANDLERS = {
-    "1": ("Registration Status",      get_registration_status),
-    "2": ("Exam Centre Details",       get_exam_centre),
-    "3": ("Attendance & Eligibility",  get_attendance),
-    "4": ("Scholarship Status",        get_scholarship_status),
-    "5": ("Certificate Status",        get_certificate_status),
-    "6": ("Renewal Status",            get_renewal_status),
+    "1": ("Registration Status",           get_registration_status),
+    "2": ("UEE Exam Centre Details",        get_exam_centre),
+    "3": ("Attendance & Eligibility",       get_attendance),
+    "4": ("Scholarship Status",             get_scholarship_status),
+    "5": ("Certificate Status",             get_certificate_status),
+    "6": ("Renewal Status",                 get_renewal_status),
 }
