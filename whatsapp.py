@@ -12,46 +12,36 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# --- Module-level Twilio client (created once at startup, not per request) ---
+_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+# Pre-compute the From number at startup
+_raw = TWILIO_WHATSAPP_NUMBER.strip()
+if _raw.startswith("whatsapp:"):
+    _FROM = _raw
+elif _raw.startswith("+"):
+    _FROM = f"whatsapp:{_raw}"
+else:
+    _FROM = f"whatsapp:+{_raw}"
+
+logger.info("📱 Twilio client ready — from=%s", _FROM)
+
 
 def send_message(to: str, body: str) -> bool:
     """
     Send a WhatsApp message via Twilio.
-
-    Args:
-        to:   recipient phone number in international format (e.g. "919876543210")
-        body: message text
-
-    Returns:
-        True if message was accepted by Twilio, False otherwise.
+    Uses the module-level client singleton for speed.
     """
-    logger.debug("send_message → to=%s body_len=%d", to, len(body))
-    logger.debug("send_message → from=%s", TWILIO_WHATSAPP_NUMBER)
-    logger.debug("send_message → Account SID present: %s", bool(TWILIO_ACCOUNT_SID))
+    to_formatted = f"whatsapp:+{to.lstrip('+')}" 
+    logger.info("📤 Sending to %s", to_formatted)
 
     try:
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-        # Twilio requires "whatsapp:+<number>" format for both From and To
-        to_formatted = f"whatsapp:+{to.lstrip('+')}"
-
-        # Normalize from number — works with any format the env var is set to
-        raw_from = TWILIO_WHATSAPP_NUMBER.strip()
-        if raw_from.startswith("whatsapp:"):
-            from_formatted = raw_from          # already correct: whatsapp:+14155238886
-        elif raw_from.startswith("+"):
-            from_formatted = f"whatsapp:{raw_from}"   # +14155238886 → whatsapp:+14155238886
-        else:
-            from_formatted = f"whatsapp:+{raw_from}"  # 14155238886 → whatsapp:+14155238886
-
-        logger.info("📤 Sending WhatsApp message to %s via Twilio ...", to_formatted)
-
-        message = client.messages.create(
+        message = _client.messages.create(
             body=body,
-            from_=from_formatted,
+            from_=_FROM,
             to=to_formatted,
         )
-
-        logger.info("✅ Message sent! SID=%s status=%s", message.sid, message.status)
+        logger.info("✅ Sent! SID=%s", message.sid)
         return True
 
     except Exception as exc:
