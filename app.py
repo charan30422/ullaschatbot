@@ -8,7 +8,7 @@ import sys
 from flask import Flask, request, jsonify
 
 from config import FLASK_PORT, FLASK_DEBUG
-from handlers import MAIN_MENU, MENU_HANDLERS, talk_to_support
+from handlers import MAIN_MENU, MENU_HANDLERS
 from whatsapp import send_message
 
 # ---- Logging ----
@@ -93,12 +93,6 @@ def _process_message(phone: str, text: str) -> None:
             logger.exception("💥 Handler for option %s failed", text)
             response = "⚠️ Something went wrong. Please try again.\n\n_Reply *menu* to go back._"
         send_message(phone, response)
-        return
-
-    # ---- Option 7 — Support ----
-    if text == "7":
-        logger.info("📞 Support selected by %s", phone)
-        send_message(phone, talk_to_support())
         return
 
     # ---- Anything else → show menu ----
