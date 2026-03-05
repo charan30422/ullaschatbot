@@ -27,7 +27,7 @@ def get_registration_status() -> str:
         f"{_DIV}\n\n"
         "✅ *Status:* VERIFIED\n"
         "📅 *Verified on:* 12 July 2026\n"
-        "🏫 *School:* GoveGovt Hss School \n\n"
+        "🏫 *School:* Govt Hss School \n\n"
         f"{_DIV}\n"
         "🎓 You are eligible for the *UEE Exam*\n"
         "📆 *Exam Date:* 12 March 2026\n\n"
