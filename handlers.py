@@ -15,9 +15,8 @@ MAIN_MENU = (
     "5️⃣  Can I get my Certificate?\n"
     "6️⃣  Am I marked for Renewal?\n"
     "7️⃣  Ask Ullas\n"
-    "8️⃣  FAQs\n"
-    "9️⃣  Talk to Support\n\n"
-    "_Reply with a number (1–9)_"
+    "8️⃣  FAQs\n\n"
+    "_Reply with a number (1–8)_"
 )
 
 
@@ -28,9 +27,10 @@ def get_registration_status() -> str:
         f"{_DIV}\n\n"
         "✅ *Status:* VERIFIED\n"
         "📅 *Verified on:* 12 July 2026\n"
-        "🆔 *Ullas ID:* UL-09-2026-00456\n\n"
-        "🏆 Congratulations! You are eligible for:\n"
-        "*CAN-DO Workshop*\n\n"
+        "🏫 *School:* GoveGovt Hss School \n\n"
+        f"{_DIV}\n"
+        "🎓 You are eligible for the *UEE Exam*\n"
+        "📆 *Exam Date:* 12 March 2026\n\n"
         f"{_NAV}"
     )
 
@@ -57,14 +57,18 @@ def get_attendance() -> str:
     return (
         "❓ *What is my Attendance & Eligibility?*\n"
         f"{_DIV}\n\n"
-        "Summit 1: ✅ Present\n"
-        "Summit 2: ✅ Present\n"
-        "Summit 3: ❌ Absent\n"
-        "Summit 4: ✅ Present\n\n"
-        "📈 *Total Attendance:* 75%\n"
-        "🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜\n\n"
-        "🎯 *Eligibility Status:*\n"
-        "Eligible for 2nd Scholarship ✅\n\n"
+        "📅 *Summit 1:* 15 Jan 2026\n"
+        "✅ Present | Attendance: 80%\n"
+        "🎯 Eligible for Scholarship\n\n"
+        f"{_DIV}\n"
+        "📅 *Summit 2:* 20 Feb 2026\n"
+        "❌ Absent | Attendance: 55%\n"
+        "⛔ Not eligible for Scholarship\n\n"
+        f"{_DIV}\n"
+        "📅 *Summit 3:* ─ Not Applicable\n"
+        "📅 *Summit 4:* ─ Not Applicable\n\n"
+        f"{_DIV}\n"
+        "📈 *Total Attendance:* 67%\n\n"
         f"{_NAV}"
     )
 
@@ -74,13 +78,13 @@ def get_scholarship_status() -> str:
     return (
         "❓ *What is my Scholarship Status?*\n"
         f"{_DIV}\n\n"
-        "✅ *1st Scholarship:* DISBURSED\n"
-        "   💵 Amount: 50%\n"
+        "✅ *Summit 1 Scholarship:* DISBURSED\n"
+        "   💵 Amount: ₹900\n"
         "   📅 Date: 14 August 2026\n"
         "   🏦 Bank: SBI XXXX\n"
         "   📤 Transfer: Successful\n\n"
         f"{_DIV}\n"
-        "⏳ *2nd Scholarship:* PENDING\n"
+        "⏳ *Summit 2 Scholarship:* PENDING\n"
         "   📝 Awaiting attendance validation\n\n"
         f"{_NAV}"
     )
@@ -93,7 +97,7 @@ def get_certificate_status() -> str:
         f"{_DIV}\n\n"
         "✅ *Status:* Available\n"
         "📜 *Type:* Participation Certificate\n"
-        "🌟 *Event:* Summit 2026\n\n"
+        "🌟 *Event:* Summit1\n\n"
         "⬇️ *Download Certificate (PDF):*\n"
         "https://ullas.example.com/cert/download\n\n"
         f"{_NAV}"
@@ -105,7 +109,7 @@ def get_renewal_status() -> str:
     return (
         "❓ *Am I marked for Renewal?*\n"
         f"{_DIV}\n\n"
-        "✅ Renewal confirmed for next academic year! 🎉\n\n"
+        "✅ Renewal confirmed for this year! 🎉\n\n"
         "👤 *Category:* Renewal\n"
         "📚 *Current Class:* 11\n"
         "📅 *Batch Year:* 2024\n\n"
@@ -172,11 +176,12 @@ def talk_to_support() -> str:
     return (
         "📞 *Ullas Support*\n"
         f"{_DIV}\n\n"
-        "Our team is here to help you! 🤝\n\n"
+        "Thanks for reaching out to Ullas Support 🙏\n\n"
         "📧 *Email:* support@ullas.example.com\n"
         "📱 *Helpline:* 1800-XXX-XXXX _(Toll-free)_\n"
         "🕘 *Hours:* Mon–Sat, 9 AM – 6 PM\n\n"
-        "An agent will get back to you shortly.\n\n"
+        "Contact the *Ullas Support Team* for\n"
+        "any further assistance.\n\n"
         f"{_NAV}"
     )
 
@@ -191,5 +196,4 @@ MENU_HANDLERS = {
     "6": ("Renewal Status",           get_renewal_status),
     "7": ("Ask Ullas",                ask_ullas),
     "8": ("FAQs",                     get_faqs),
-    "9": ("Talk to Support",          talk_to_support),
 }
